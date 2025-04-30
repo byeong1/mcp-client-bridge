@@ -1,13 +1,13 @@
-import readline from 'readline';
-import { MCPLLMBridge } from './bridge';
-import { loadBridgeConfig } from './config';
-import { logger } from './logger';
-import { exec } from 'child_process';
-import { BridgeConfig } from './types';
+import readline from "readline";
+import { MCPLLMBridge } from "./bridge";
+import { loadBridgeConfig } from "./config";
+import { logger } from "./logger";
+import { exec } from "child_process";
+import { BridgeConfig } from "./types";
 
 const rl = readline.createInterface({
   input: process.stdin,
-  output: process.stdout
+  output: process.stdout,
 });
 
 async function question(prompt: string): Promise<string> {
@@ -17,17 +17,18 @@ async function question(prompt: string): Promise<string> {
 }
 
 async function forceExit() {
-  logger.info('Force exiting...');
-  
+  logger.info("Force exiting...");
+
   try {
-    exec('taskkill /F /IM ollama.exe', () => {});
+    exec("taskkill /F /IM ollama.exe", () => {});
     exec('netstat -ano | findstr ":11434"', (error: any, stdout: string) => {
       if (!error && stdout) {
-        const pids = stdout.split('\n')
-          .map(line => line.trim().split(/\s+/).pop())
-          .filter(pid => pid && /^\d+$/.test(pid));
-        
-        pids.forEach(pid => {
+        const pids = stdout
+          .split("\n")
+          .map((line) => line.trim().split(/\s+/).pop())
+          .filter((pid) => pid && /^\d+$/.test(pid));
+
+        pids.forEach((pid) => {
           exec(`taskkill /F /PID ${pid}`, () => {});
         });
       }
@@ -41,38 +42,40 @@ async function forceExit() {
 
 async function main() {
   try {
-    logger.info('Starting main.ts...');
+    logger.info("Starting main.ts...");
     const configFile = await loadBridgeConfig();
 
-    // Create bridge config with all MCPs
+    // Create bridge config with MySQL MCP only
     const bridgeConfig: BridgeConfig = {
-      mcpServer: configFile.mcpServers.filesystem,  // Primary MCP
-      mcpServerName: 'filesystem',
-      mcpServers: configFile.mcpServers,           // All MCPs including Flux
+      mcpServer: configFile.mcpServers.MySQL,
+      mcpServerName: "MySQL",
+      mcpServers: {
+        MySQL: configFile.mcpServers.MySQL,
+      },
       llmConfig: configFile.llm!,
-      systemPrompt: configFile.systemPrompt
+      systemPrompt: configFile.systemPrompt,
     };
 
-    logger.info('Initializing bridge with MCPs:', Object.keys(configFile.mcpServers).join(', '));
+    logger.info("Initializing bridge with MCPs: MySQL");
     const bridge = new MCPLLMBridge(bridgeConfig);
     const initialized = await bridge.initialize();
 
     if (!initialized) {
-      throw new Error('Failed to initialize bridge');
+      throw new Error("Failed to initialize bridge");
     }
 
-    logger.info('Available commands:');
-    logger.info('  list-tools: Show all available tools and their parameters');
-    logger.info('  quit: Exit the program');
-    logger.info('  Any other input will be sent to the LLM');
+    logger.info("Available commands:");
+    logger.info("  list-tools: Show all available tools and their parameters");
+    logger.info("  quit: Exit the program");
+    logger.info("  Any other input will be sent to the LLM");
 
     let isClosing = false;
 
     while (!isClosing) {
       try {
         const userInput = await question("\nEnter your prompt (or 'list-tools' or 'quit'): ");
-        
-        if (userInput.toLowerCase() === 'quit') {
+
+        if (userInput.toLowerCase() === "quit") {
           isClosing = true;
           await bridge.close();
           rl.close();
@@ -80,14 +83,14 @@ async function main() {
           break;
         }
 
-        if (userInput.toLowerCase() === 'list-tools') {
+        if (userInput.toLowerCase() === "list-tools") {
           await bridge.llmClient.listTools();
           continue;
         }
 
-        logger.info('Processing user input...');
+        logger.info("Processing user input...");
         const response = await bridge.processMessage(userInput);
-        logger.info('Received response from bridge');
+        logger.info("Received response from bridge");
         console.log(`\nResponse: ${response}`);
       } catch (error: any) {
         logger.error(`Error occurred: ${error?.message || String(error)}`);
@@ -99,17 +102,17 @@ async function main() {
   }
 }
 
-process.on('SIGINT', () => {
-  logger.info('Received SIGINT...');
+process.on("SIGINT", () => {
+  logger.info("Received SIGINT...");
   forceExit();
 });
 
-process.on('exit', () => {
-  logger.info('Exiting process...');
+process.on("exit", () => {
+  logger.info("Exiting process...");
 });
 
 if (require.main === module) {
-  main().catch(error => {
+  main().catch((error) => {
     logger.error(`Unhandled error: ${error?.message || String(error)}`);
     forceExit();
   });
